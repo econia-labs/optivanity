@@ -1377,6 +1377,7 @@ dependencies = [
  "aptos-crypto",
  "aptos-keygen",
  "aptos-types",
+ "chrono",
  "clap",
  "crossbeam",
  "hex",
