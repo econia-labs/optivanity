@@ -1,0 +1,15 @@
+[package]
+name = "optivanity"
+version = "1.0.0"
+edition = "2021"
+authors = ["Econia Labs"]
+
+[dependencies]
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
+aptos-keygen = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
+hex = "0.4.3"
+
+[profile.release]
+lto = true
+codegen-units = 1
