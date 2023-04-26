@@ -152,7 +152,11 @@ fn main() -> Result<()> {
         let match_tx = match_tx.clone();
         let exit_rx = exit_rx.clone();
         let prefix = args.prefix.clone();
-        thread::spawn(move || generate_key(prefix, args.multisig, match_tx, exit_rx).unwrap());
+        thread::spawn(move || {
+            if let Err(e) = generate_key(prefix, args.multisig, match_tx, exit_rx) {
+                println!("Error: {}, in thread: {:?}", e, thread::current().id());
+            }
+        });
     }
 
     // Stop search after the desired number of addresses have been generated.
