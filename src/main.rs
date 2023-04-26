@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use aptos_keygen::KeyGen;
 use aptos_types::{
