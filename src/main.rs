@@ -19,6 +19,7 @@ const SEQUENCE_NUMBER_MULTISIG: u64 = 0;
 #[derive(Parser, Debug)]
 struct CliArgs {
     /// Address prefix to match (no leading 0x). Each additional character slows search by 16x.
+    #[arg(short, long)]
     prefix: String,
     /// Use this flag if you want to search for multisig address(es)
     #[arg(short, long)]
@@ -78,10 +79,11 @@ fn generate_key(
     if has_odd_character_count(&check_str) {
         check_str.pop();
     };
+
     // Convert resulting string to bytes for checking against. For odd-length prefixes this approach
     // truncates the final character, which must be checked via string compare after a bytes match.
     // This is done for performance (to minimize string operations during the loop).
-    let prefix_bytes = hex::decode(check_str).unwrap();
+    let prefix_bytes = hex::decode(check_str)?;
 
     // Randomly generate private keys in a loop and check match against prefix bytes.
     let mut key_generator = KeyGen::from_os_rng();
