@@ -47,19 +47,11 @@ fn parse_args() -> Result<CliArgs> {
         hex::decode(&args.prefix)?;
     }
 
-    // Verify user hasn't specified excessive thread count.
-    if args.threads > available_parallelism().unwrap().get() {
-        return Err(anyhow!(
-            "Your machine cannot support {} parallel threads",
-            args.threads
-        ));
-    };
-
     Ok(args)
 }
 
 /// Return `true` if string reference indicates a string with an odd number of characters.
-fn has_odd_character_count(string_ref: &String) -> bool {
+fn has_odd_character_count(string_ref: &str) -> bool {
     string_ref.len() % 2 == 1
 }
 
