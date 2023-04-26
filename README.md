@@ -88,7 +88,6 @@ The optional thread count argument controls how many independent search threads 
 Two search threads running in parallel, for example, will on average take $\frac{1}{2}$ as long to generate an address compared with a single search thread, which is what the `aptos` CLI uses.
 Three threads will on average take $\frac{1}{3}$ as long, four will on average take $\frac{1}{4}$ as long, and so on, **until the thread count equals the number of available cores**:
 if your machine only has four available cores, you will not see performance increases for a five-thread search because you can only run four threads in parallel.
-Hence `optivanity` will return with an error if you try to initiate a search with a thread count in excess of available parallelism.
 
 In other words, *only* specify thread count if you want to slow down the search for machine longevity.
 
