@@ -18,7 +18,7 @@ const SEQUENCE_NUMBER_MULTISIG: u64 = 0;
 /// by Econia Labs
 #[derive(Parser, Debug)]
 struct CliArgs {
-    /// Address prefix to match (no leading 0x). Each additional character slows search by 16x.
+    /// Address prefix to match (no leading `0x`). Each additional character slows search by 16x.
     #[arg(short, long)]
     prefix: String,
     /// Use this flag if you want to search for multisig address(es)
@@ -51,7 +51,7 @@ fn parse_args() -> Result<CliArgs> {
     Ok(args)
 }
 
-/// Return `true` if string reference indicates a string with an odd number of characters.
+/// Return `true` if string slice reference indicates a string with an odd number of characters.
 fn has_odd_character_count(string_ref: &str) -> bool {
     string_ref.len() % 2 == 1
 }

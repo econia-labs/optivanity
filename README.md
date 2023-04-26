@@ -22,12 +22,10 @@
 
 Optivanity: hyper-parallelized vanity address generator for the Aptos blockchain, brought to you by Econia Labs
 
-Usage: optivanity [OPTIONS] <PREFIX>
-
-Arguments:
-  <PREFIX>  Address prefix to match (no leading 0x). Each additional character slows search by 16x
+Usage: optivanity [OPTIONS] --prefix <PREFIX>
 
 Options:
+  -p, --prefix <PREFIX>    Address prefix to match (no leading `0x`). Each additional character slows search by 16x
   -m, --multisig           Use this flag if you want to search for multisig address(es)
   -c, --count <COUNT>      Number of vanity accounts to generate [default: 1]
   -t, --threads <THREADS>  Number of threads to use. Only specify if you want to use fewer cores than available [default: 10]
@@ -38,37 +36,37 @@ Options:
 
 ```zsh
 # Generate a single standard account address starting with aaaaa, maximum parallelism
-% cargo run --release -- aaaaa
+% cargo run --release -- --prefix aaaaa
 
-Starting search at 2023-04-25T13:13:34.156231-07:00
+Starting search at 2023-04-26T12:06:11.583917-07:00
 
-Standard account address: 0xaaaaa3248e447b8bd61eff40a5a215da10b3c365709aedbe7f391e2c5249d496
-Private key:              0x6562b0a50fb07ef8c1c4437c4ae94a31691f9ac89e97d53b75722d38c94fe2fc
+Standard account address: 0xaaaaa08d6dd99050567e11eb5ac338c8b7976a94d8dc07d2c346fc60e12a5d32
+Private key:              0x3912b341c3763f9193dab75df849dbe232ca1e0234dec690e78578e30ebc8e20
 
-Elapsed time: 2.032645459s
+Elapsed time: 1.059834208s
 ```
 
 ### Octa-core multisig vanity address generation
 
 ```zsh
 # Generate 3 multisig account addresses starting with bbbbbb, parallelized across 8 cores
-% cargo run --release -- bbbbbb --multisig --count 3 --threads 8
+% cargo run --release -- --prefix bbbbbb --multisig --count 3 --threads 8
 
-Starting search at 2023-04-25T13:15:04.699368-07:00
+Starting search at 2023-04-26T12:06:57.444782-07:00
 
-Multisig account address: 0xbbbbbb532e62e320454b33819cce3983f6c4575189a7b35f61d8e8c95b87696b
-Standard account address: 0xd7fcaf7ae574f038e1d5ae8430b8c46299351a4c943a846a58766e44b8be1b55
-Private key:              0xe71063e6b8ef27e46aafed04337ec9660e46677cc57f6b6b0981186f38f5ad09
+Multisig account address: 0xbbbbbbf1061840cccc8542b98ace03b73a2ffc7df609fbaf99c546982a8b7dc8
+Standard account address: 0xfc05df546a70c2fafeb8b9b19637fc9b70c2300e1e6f570c6369798f4afd6c77
+Private key:              0xd220c6fb9df3836d8e1463435cb427ff270b3ce417769adaf5903ebd49560da4
 
-Multisig account address: 0xbbbbbbb30c013a24e176ef3e9399a85d957cf9e6204487d3b20e33d89c7d7a70
-Standard account address: 0x0ba8cccb9701d5806b8ad1e15cc16f13700e976cc8540c1c7192fba539399664
-Private key:              0x2d7f1658e71985d5b175b1361aea7aa19bddc6e4d297f8cae8df3956fb79c44d
+Multisig account address: 0xbbbbbb4ab601a7c40b96384ef63a357609ad843056fbab6158bb396dd3193878
+Standard account address: 0x490f50f84013452a6660d99e8018acc1f20241da8321e9ddfb0d2b70c48742ef
+Private key:              0x7cd4bece605833845b00da1015e4615d48dffdf5714ce62980d305934f13df80
 
-Multisig account address: 0xbbbbbb4b158d3ea973d6ab2a48b0f33ee4e553460f45db379ab3a96b0fa7ca5c
-Standard account address: 0xef072248921951c00eb65b4fe9daa4f1753e853cbc3e07be45c21d5e9bcd2ce0
-Private key:              0x9aa178ff8a0afa3ef78944147307c1beb08ac4dc87bd3d1784067fa353575cb7
+Multisig account address: 0xbbbbbbfba754ccf12a05bf087051fe190928e41bafbeaa20ca94b6b066cfbed8
+Standard account address: 0x9f770fb89a85ce2916f127d3280d261234fc572d9949d7a9ffbe9b44251add20
+Private key:              0xa35f8534e883c1cf60b6c0d96863ac3eb54a9ce437708a1ac81762e268875312
 
-Elapsed time: 68.436100916s
+Elapsed time: 61.497349083s
 ```
 
 ## General
@@ -98,11 +96,15 @@ This is probably not the optimal thread count for machine longevity, however, be
 Running with only six threads does not result in the fan noticeably turning on and is sufficient, for example, to generate an address with an eight-character vanity prefix overnight.
 
 `optivanity` relies on a main watchdog thread that closes search threads once enough addresses have been generated.
-Hence in the "Activity Monitor" app for the above machine, `cargo run --release -- aaaaa --threads 6 --count 100` results in the following:
+Hence for the "Activity Monitor" app on the above machine, the following command results in the following readout:
+
+```zsh
+cargo run --release -- --prefix aaaaa --threads 6 --count 100
+```
 
 | Process Name | % CPU | Threads |
 | ------------ | ----- | ------- |
 | `optivanity` | 600   | 7       |
 
 Here, six cores are each running a search thread at ~100% capacity, with a seventh non-search thread consuming almost no load.
-Hence without other major processes running, this results in a user CPU load of slightly above 60%.
+Hence without other major processes running, this results in a user CPU load of about 60%.
