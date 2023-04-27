@@ -5,9 +5,13 @@ edition = "2021"
 authors = ["Econia Labs"]
 
 [dependencies]
+anyhow = "1.0.51"
 aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
 aptos-keygen = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
 aptos-types = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
+clap = { version = "4.2.4", features = ["derive"] }
+chrono = "0.4.24"
+crossbeam = "0.8.2"
 hex = "0.4.3"
 
 [profile.release]
