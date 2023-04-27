@@ -14,7 +14,7 @@ use std::thread::{self, available_parallelism};
 use std::time::{Instant, SystemTime};
 
 /// Regex for checking that prefix only includes valid hex characters.
-static HEX_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[0-9a-fA-F]+").unwrap());
+static HEX_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[0-9a-fA-F]+$").unwrap());
 
 /// Multisig account generation is assumed to take place in first transaction of standard account.
 const SEQUENCE_NUMBER_MULTISIG: u64 = 0;
@@ -48,7 +48,7 @@ fn parse_args() -> Result<CliArgs> {
 
     // Verify prefix has valid hex characters.
     if !HEX_REGEX.is_match(&args.prefix) {
-        bail!("prefix '{}' is not valid hex", &args.prefix);
+        bail!("prefix '{}' is not a valid hex prefix", &args.prefix);
     }
 
     Ok(args)
