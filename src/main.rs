@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use aptos_keygen::KeyGen;
 use aptos_types::{
@@ -8,8 +8,13 @@ use aptos_types::{
 use chrono::prelude::{DateTime, Local};
 use clap::Parser;
 use crossbeam::channel;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::thread::{self, available_parallelism};
 use std::time::{Instant, SystemTime};
+
+/// Regex for checking that prefix only includes valid hex characters.
+static HEX_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[0-9a-fA-F]+").unwrap());
 
 /// Multisig account generation is assumed to take place in first transaction of standard account.
 const SEQUENCE_NUMBER_MULTISIG: u64 = 0;
@@ -41,11 +46,9 @@ fn auth_key_bytes_vec(private_key_ref: &Ed25519PrivateKey) -> Vec<u8> {
 fn parse_args() -> Result<CliArgs> {
     let args = CliArgs::parse();
 
-    // Verify prefix has valid hex characters, appending a 0 as needed for an odd character count.
-    if has_odd_character_count(&args.prefix) {
-        hex::decode(format!("{}0", &args.prefix))?;
-    } else {
-        hex::decode(&args.prefix)?;
+    // Verify prefix has valid hex characters.
+    if !HEX_REGEX.is_match(&args.prefix) {
+        bail!("prefix '{}' is not valid hex", &args.prefix);
     }
 
     Ok(args)

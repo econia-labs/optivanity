@@ -9,10 +9,12 @@ anyhow = "1.0.51"
 aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
 aptos-keygen = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
 aptos-types = { git = "https://github.com/aptos-labs/aptos-core", branch = "main" }
-clap = { version = "4.2.4", features = ["derive"] }
 chrono = "0.4.24"
+clap = { version = "4.2.4", features = ["derive"] }
 crossbeam = "0.8.2"
 hex = "0.4.3"
+once_cell = "1.17.1"
+regex = "1.8.1"
 
 [profile.release]
 lto = true
