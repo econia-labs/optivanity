@@ -1,20 +1,17 @@
 use anyhow::{bail, Result};
-use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
-use aptos_keygen::KeyGen;
-use aptos_types::{
-    account_address::{create_multisig_account_address, AccountAddress},
-    transaction::authenticator::AuthenticationKey,
-};
-use chrono::prelude::{DateTime, Local};
 use clap::Parser;
-use crossbeam::channel;
-use once_cell::sync::Lazy;
+use ed25519_dalek::SigningKey;
+use num::{BigInt, FromPrimitive};
 use regex::Regex;
-use std::thread::{self, available_parallelism};
-use std::time::{Instant, SystemTime};
-
-/// Regex for checking that prefix only includes valid hex characters.
-static HEX_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[0-9a-fA-F]+$").unwrap());
+use sha3::{Digest, Sha3_256};
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering::Relaxed},
+        Arc,
+    },
+    thread::{self, available_parallelism},
+    time::{Duration, Instant},
+};
 
 /// Multisig account generation is assumed to take place in first transaction of standard account.
 const SEQUENCE_NUMBER_MULTISIG: u64 = 0;
@@ -25,7 +22,10 @@ const SEQUENCE_NUMBER_MULTISIG: u64 = 0;
 struct CliArgs {
     /// Address prefix to match (no leading `0x`). Each additional character slows search by 16x.
     #[arg(short, long)]
-    prefix: String,
+    prefix: Option<String>,
+    /// Address suffix to match. Each additional character slows search by 16x.
+    #[arg(short, long)]
+    suffix: Option<String>,
     /// Use this flag if you want to search for multisig address(es)
     #[arg(short, long)]
     multisig: bool,
@@ -38,18 +38,66 @@ struct CliArgs {
 }
 
 /// Derive authentication key bytes vector from a reference to a private key.
-fn auth_key_bytes_vec(private_key_ref: &Ed25519PrivateKey) -> Vec<u8> {
-    AuthenticationKey::ed25519(&Ed25519PublicKey::from(private_key_ref)).to_vec()
+fn auth_key_bytes_vec(private_key_ref: &SigningKey) -> Vec<u8> {
+    // Get public key from private key
+    let mut public = Into::<ed25519_dalek::VerifyingKey>::into(private_key_ref)
+        .to_bytes()
+        .to_vec();
+    // Push 0 which is the schema identifier for Ed25519 in the Aptos codebase
+    public.push(0);
+    // Hash the result and return the hash
+    let mut h = Sha3_256::new();
+    h.update(public);
+    h.finalize().to_vec()
+}
+
+/// Creates a multisig account address.
+/// Code inspired by the Aptos codebase.
+/// This is reimplemented to avoid adding Aptos as a dependency which adds over 200 other crates.
+/// See https://github.com/aptos-labs/aptos-core/blob/e2c8a6726a9bc4be464a755b47a113771a89e72c/types/src/account_address.rs#L239
+pub fn create_multisig_account_address(mut creator: Vec<u8>, creator_nonce: u64) -> Vec<u8> {
+    let mut full_seed = vec![];
+    full_seed.extend(b"aptos_framework::multisig_account");
+    full_seed.extend(creator_nonce.to_le_bytes());
+    creator.extend(full_seed);
+    creator.push(255);
+    let mut h = Sha3_256::new();
+    h.update(creator);
+    h.finalize().to_vec()
 }
 
 /// Parse command line arguments, verifying hex characters and specified thread count.
 fn parse_args() -> Result<CliArgs> {
-    let args = CliArgs::parse();
+    let mut args = CliArgs::parse();
+
+    let r = Regex::new(r"^[0-9a-fA-F]+$").unwrap();
 
     // Verify prefix has valid hex characters.
-    if !HEX_REGEX.is_match(&args.prefix) {
-        bail!("prefix '{}' is not a valid hex prefix", &args.prefix);
+    if !args
+        .prefix
+        .clone()
+        .map_or(true, |prefix| r.is_match(&prefix))
+    {
+        bail!(
+            "prefix '{}' is not a valid hex prefix",
+            &args.prefix.unwrap()
+        );
     }
+
+    // Verify prefix has valid hex characters.
+    if !args
+        .suffix
+        .clone()
+        .map_or(true, |suffix| r.is_match(&suffix))
+    {
+        bail!(
+            "suffix '{}' is not a valid hex suffix",
+            &args.suffix.unwrap()
+        );
+    }
+
+    args.prefix = args.prefix.map(|e| e.to_lowercase());
+    args.suffix = args.suffix.map(|e| e.to_lowercase());
 
     Ok(args)
 }
@@ -59,78 +107,116 @@ fn has_odd_character_count(string_ref: &str) -> bool {
     string_ref.len() % 2 == 1
 }
 
+/// Convert a char to what hex number it represents.
+fn to_byte(c: char) -> u8 {
+    match c {
+        '0' => 0x0,
+        '1' => 0x1,
+        '2' => 0x2,
+        '3' => 0x3,
+        '4' => 0x4,
+        '5' => 0x5,
+        '6' => 0x6,
+        '7' => 0x7,
+        '8' => 0x8,
+        '9' => 0x9,
+        'a' => 0xa,
+        'b' => 0xb,
+        'c' => 0xc,
+        'd' => 0xd,
+        'e' => 0xe,
+        'f' => 0xf,
+        _ => panic!(),
+    }
+}
+
+fn hex_string_to_bytes(s: &str) -> Result<(Vec<u8>, Option<u8>)> {
+    if has_odd_character_count(&s) {
+        let c = s.chars().last().unwrap();
+        Ok((hex::decode(s[..s.len() - 1].to_string())?, Some(to_byte(c))))
+    } else {
+        Ok((hex::decode(s.to_string())?, None))
+    }
+}
+
 /// Generate a private key corresponding to a vanity prefix, while search is ongoing.
 ///
 /// Once a match is found, a match message is transmitted to the main thread. Once the main thread
-/// has received sufficient match transactions, it broadcasts an exit transaction to search threads.
+/// has received sufficient match transactions, it will exit making all the other threads stop.
 ///
 /// # Arguments
 ///
 /// * `prefix` - The vanity prefix to search against
+/// * `prefix` - The vanity suffix to search against
 /// * `multisig` - If `true` search for a multisig address
 /// * `match_tx` - Transmit channel for match message sent to main thread when a match is found
-/// * `exit_rx` - Receive channel for exit message broadcast from main thread when search is done
+/// * `counter` - Atomic integer that keeps track of the total number of addresses generated
 fn generate_key(
-    prefix: String,
+    prefix: Option<String>,
+    suffix: Option<String>,
     multisig: bool,
-    match_tx: channel::Sender<()>,
-    exit_rx: channel::Receiver<()>,
+    match_tx: std::sync::mpsc::Sender<(String, String, Option<String>)>,
+    counter: Arc<AtomicU64>,
 ) -> Result<()> {
-    // Clone prefix for getting bytes to check against.
-    let mut check_str = prefix.clone();
-    // Pop last character of check string if an odd length.
-    if has_odd_character_count(&check_str) {
-        check_str.pop();
+    // Translate prefix string to bytes
+    let prefix = if let Some(prefix) = prefix {
+        Some(hex_string_to_bytes(&prefix)?)
+    } else {
+        None
     };
 
-    // Convert resulting string to bytes for checking against. For odd-length prefixes this approach
-    // truncates the final character, which must be checked via string compare after a bytes match.
-    // This is done for performance (to minimize string operations during the loop).
-    let prefix_bytes = hex::decode(check_str)?;
+    // Translate suffix string to bytes
+    let suffix = if let Some(suffix) = suffix {
+        Some(hex_string_to_bytes(&suffix)?)
+    } else {
+        None
+    };
 
     // Randomly generate private keys in a loop and check match against prefix bytes.
-    let mut key_generator = KeyGen::from_os_rng();
+    let mut rng = rand::rngs::OsRng;
     loop {
-        // Exit search loop if exit message has been broadcast.
-        if exit_rx.try_recv().is_ok() {
-            return Ok(());
-        }
         // Generate a private key and from it, bytes to compare against prefix bytes.
-        let private_key = key_generator.generate_ed25519_private_key();
+        let private_key = SigningKey::generate(&mut rng);
         let account_address_bytes = auth_key_bytes_vec(&private_key);
         let search_bytes = if multisig {
-            create_multisig_account_address(
-                AccountAddress::from_bytes(account_address_bytes)?,
-                SEQUENCE_NUMBER_MULTISIG,
-            )
-            .to_vec()
+            create_multisig_account_address(account_address_bytes, SEQUENCE_NUMBER_MULTISIG)
         } else {
             account_address_bytes
         };
 
-        // If a match found, print diagnostics then keep searching.
-        if search_bytes.starts_with(&prefix_bytes) {
-            let search_str = hex::encode(search_bytes);
-            // Verify full string match only if prefix has an odd character count.
-            if has_odd_character_count(&prefix) && !search_str.starts_with(&prefix) {
+        // Increment generated addresses counter
+        counter.fetch_add(1, Relaxed);
+
+        // Check prefix match
+        if let Some((pb, pc)) = &prefix {
+            if !search_bytes.starts_with(pb) {
                 continue;
             }
-            // Get standard account address. If multisig:
-            let account_address_hex = if multisig {
-                println!("Multisig account address: 0x{}", search_str);
-                // Re-derive account address here rather than cloning during search.
-                hex::encode(auth_key_bytes_vec(&private_key))
-            } else {
-                // If not multisig, standard account address is from search.
-                search_str
-            };
-            println!("Standard account address: 0x{}", account_address_hex);
-            println!(
-                "Private key:              0x{}\n",
-                hex::encode(private_key.to_bytes())
-            );
-            // Transmit match message back to main thread.
-            match_tx.send(())?;
+            if let Some(pc) = pc {
+                if !(search_bytes[pb.len()] >> 4 == *pc) {
+                    continue;
+                }
+            }
+        }
+        // Check suffix match
+        if let Some((sb, sc)) = &suffix {
+            if !search_bytes.ends_with(sb) {
+                continue;
+            }
+            if let Some(sc) = sc {
+                if !(search_bytes[search_bytes.len() - sb.len() - 1] & 0x0f == *sc) {
+                    continue;
+                }
+            }
+        }
+
+        // Send match
+        let str = hex::encode(search_bytes);
+        let pk = hex::encode(private_key.to_bytes());
+        if multisig {
+            match_tx.send((hex::encode(auth_key_bytes_vec(&private_key)), pk, Some(str)))?;
+        } else {
+            match_tx.send((str, pk, None))?;
         }
     }
 }
@@ -138,36 +224,90 @@ fn generate_key(
 /// Parses arguments, starts a timer, then spawns parallel search threads. Once search threads have
 /// transmitted back enough match messages, broadcasts an exit transaction and prints elapsed time.
 fn main() -> Result<()> {
-    let start_time = Instant::now();
     let args = parse_args()?;
-    println!(
-        "\nStarting search at {:#?}\n",
-        DateTime::<Local>::from(SystemTime::now())
-    );
+    let start_time = Instant::now();
 
     // Initialize message channels for match and exit messages.
-    let (match_tx, match_rx) = channel::unbounded::<()>();
-    let (exit_tx, exit_rx) = channel::bounded::<()>(1);
+    let (match_tx, match_rx) = std::sync::mpsc::channel::<(String, String, Option<String>)>();
+
+    let count = Arc::new(AtomicU64::new(0));
 
     // Spawn parallel search threads.
     for _ in 0..args.threads {
         // Locally clone arguments not implementing copy trait so they can be moved into closure.
         let match_tx = match_tx.clone();
-        let exit_rx = exit_rx.clone();
         let prefix = args.prefix.clone();
+        let suffix = args.suffix.clone();
+        let count = count.clone();
         thread::spawn(move || {
-            if let Err(e) = generate_key(prefix, args.multisig, match_tx, exit_rx) {
+            if let Err(e) = generate_key(prefix, suffix, args.multisig, match_tx, count) {
                 println!("Error: {}, in thread: {:?}", e, thread::current().id());
             }
         });
     }
 
+    let bar = indicatif::ProgressBar::new_spinner();
+
+    let bar2 = bar.clone();
+    let count2 = count.clone();
+    thread::spawn(move || {
+        // Chance of getting the right address each time a guess is made
+        let chance = BigInt::from_u8(16).unwrap();
+        let chance = chance
+            .pow((args.prefix.map_or(0, |e| e.len()) + args.suffix.map_or(0, |e| e.len())) as u32);
+
+        // Number of addresses to generate
+        let n_guesses_needed = args.count.clone();
+
+        let mut buf = vec![];
+        let mut first = true;
+        let mut prev_count = 0;
+
+        loop {
+            thread::sleep(Duration::from_millis(100));
+            let current_count = count2.load(Relaxed);
+            let it_per_s = (current_count - prev_count) * 10;
+            bar2.set_message(format!("Iterations per second: {} it/s", it_per_s));
+            bar2.tick();
+
+            // Store 5 it/s speeds, average that, then calculate the estimated amount of time
+            if buf.len() < 5 {
+                buf.push(it_per_s);
+            } else if first {
+                first = !first;
+                let average = BigInt::from_u64(buf.iter().sum::<u64>() / 5).unwrap();
+                let average_per_minute = average * 60;
+                let estimate: BigInt = chance.clone() * n_guesses_needed / average_per_minute;
+                bar2.suspend(|| {
+                    println!("Estimate: {} minutes", estimate);
+                    println!();
+                })
+            }
+
+            prev_count = current_count;
+        }
+    });
+
     // Stop search after the desired number of addresses have been generated.
     for _ in 0..args.count {
-        match_rx.recv()?;
+        let (addr, pk, multi) = match_rx.recv()?;
+        bar.suspend(|| {
+            if let Some(multi) = multi {
+                println!("Multisig account address: 0x{}", multi);
+                println!("Standard account address: 0x{}", addr);
+                println!("Private key:              0x{}", pk);
+                println!();
+            } else {
+                println!("Standard account address: 0x{}", addr);
+                println!("Private key:              0x{}", pk);
+                println!();
+            }
+        });
     }
-    exit_tx.send(())?;
 
-    println!("Elapsed time: {:#?}\n", start_time.elapsed());
+    bar.finish_and_clear();
+
+    println!("Elapsed time: {:#?}", start_time.elapsed());
+    println!("Total addresses generated: {}", count.load(Relaxed));
     Ok(())
 }
