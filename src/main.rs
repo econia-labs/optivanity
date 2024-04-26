@@ -130,15 +130,6 @@ fn to_byte(c: char) -> u8 {
     }
 }
 
-fn hex_string_to_bytes(s: &str) -> Result<(Vec<u8>, Option<u8>)> {
-    if has_odd_character_count(&s) {
-        let c = s.chars().last().unwrap();
-        Ok((hex::decode(s[..s.len() - 1].to_string())?, Some(to_byte(c))))
-    } else {
-        Ok((hex::decode(s.to_string())?, None))
-    }
-}
-
 /// Generate a private key corresponding to a vanity prefix, while search is ongoing.
 ///
 /// Once a match is found, a match message is transmitted to the main thread. Once the main thread
@@ -159,15 +150,25 @@ fn generate_key(
     counter: Arc<AtomicU64>,
 ) -> Result<()> {
     // Translate prefix string to bytes
-    let prefix = if let Some(prefix) = prefix {
-        Some(hex_string_to_bytes(&prefix)?)
+    let prefix = if let Some(s) = prefix {
+        Some(if has_odd_character_count(&s) {
+            let c = s.chars().last().unwrap();
+            (hex::decode(s[..s.len() - 1].to_string())?, Some(to_byte(c)))
+        } else {
+            (hex::decode(s.to_string())?, None)
+        })
     } else {
         None
     };
 
     // Translate suffix string to bytes
-    let suffix = if let Some(suffix) = suffix {
-        Some(hex_string_to_bytes(&suffix)?)
+    let suffix = if let Some(s) = suffix {
+        Some(if has_odd_character_count(&s) {
+            let c = s.chars().next().unwrap();
+            (hex::decode(s[1..].to_string())?, Some(to_byte(c)))
+        } else {
+            (hex::decode(s.to_string())?, None)
+        })
     } else {
         None
     };
