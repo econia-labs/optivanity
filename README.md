@@ -36,13 +36,15 @@ Options:
 ### Ed25519 vanity address generation
 
 ```zsh
-# Generate a single standard account address starting with aaaaa, maximum parallelism
-% cargo run --release -- --prefix aaaaa
-Standard account address: 0xaab0eba3bc47066f6a3e9d0086f8d816b5590fe3bd8901143da269aa7887e2aa
-Private key:              0x640d3c18524a11af3461d2d3252d0b54e09c897e1db53185f904e25dec4c49f9
+# Generate a single standard account address starting with aaa, ending with bbb, maximum parallelism
+% cargo run --release -- --prefix aaa --suffix bbb
+Estimate: 0 minutes
 
-Elapsed time: 34.772661ms
-Total addresses generated: 19214
+Standard account address: 0xaaa52f2e7402b0b1987ec565cc355e720bfb143167be59fd74bb52d31e316bbb
+Private key:              0x502b8b67570b98aba3a69649dbbb3675e633072729457be2638a5670172e9db9
+
+Elapsed time: 15.170995791s
+Total addresses generated: 8475543
 ```
 
 ### Octa-core multisig vanity address generation
@@ -92,7 +94,7 @@ The algorithms in `optivanity` were developed on a 2021 MacBook Pro with a ten-c
 This is probably not the optimal thread count for machine longevity, however, because a ten-thread search results in the fan running full blast to prevent overheating.
 Running with only six threads does not result in the fan noticeably turning on and is sufficient, for example, to generate an address with an eight-character vanity prefix overnight.
 
-`optivanity` relies on a main watchdog thread that closes search threads once enough addresses have been generated.
+`optivanity` relies on a two watchdog threads that close the search threads once enough addresses have been generated.
 Hence for the "Activity Monitor" app on the above machine, the following command results in the following readout:
 
 ```zsh
@@ -101,7 +103,7 @@ cargo run --release -- --prefix aaaaa --threads 6 --count 100
 
 | Process Name | % CPU | Threads |
 | ------------ | ----- | ------- |
-| `optivanity` | 600   | 7       |
+| `optivanity` | 600   | 8       |
 
 Here, six cores are each running a search thread at ~100% capacity, with a seventh non-search thread consuming almost no load.
 Hence without other major processes running, this results in a user CPU load of about 60%.
