@@ -22,10 +22,11 @@
 
 Optivanity: hyper-parallelized vanity address generator for the Aptos blockchain, brought to you by Econia Labs
 
-Usage: optivanity [OPTIONS] --prefix <PREFIX>
+Usage: optivanity [OPTIONS]
 
 Options:
   -p, --prefix <PREFIX>    Address prefix to match (no leading `0x`). Each additional character slows search by 16x
+  -s, --suffix <SUFFIX>    Address suffix to match. Each additional character slows search by 16x
   -m, --multisig           Use this flag if you want to search for multisig address(es)
   -c, --count <COUNT>      Number of vanity accounts to generate [default: 1]
   -t, --threads <THREADS>  Number of threads to use. Only specify if you want to use fewer cores than available [default: 10]
@@ -37,36 +38,32 @@ Options:
 ```zsh
 # Generate a single standard account address starting with aaaaa, maximum parallelism
 % cargo run --release -- --prefix aaaaa
+Standard account address: 0xaab0eba3bc47066f6a3e9d0086f8d816b5590fe3bd8901143da269aa7887e2aa
+Private key:              0x640d3c18524a11af3461d2d3252d0b54e09c897e1db53185f904e25dec4c49f9
 
-Starting search at 2023-04-26T12:06:11.583917-07:00
-
-Standard account address: 0xaaaaa08d6dd99050567e11eb5ac338c8b7976a94d8dc07d2c346fc60e12a5d32
-Private key:              0x3912b341c3763f9193dab75df849dbe232ca1e0234dec690e78578e30ebc8e20
-
-Elapsed time: 1.059834208s
+Elapsed time: 34.772661ms
+Total addresses generated: 19214
 ```
 
 ### Octa-core multisig vanity address generation
 
 ```zsh
 # Generate 3 multisig account addresses starting with bbbbbb, parallelized across 8 cores
-% cargo run --release -- --prefix bbbbbb --multisig --count 3 --threads 8
+% cargo run --release -- --prefix bbbb --multisig --count 3 --threads 8
+Multisig account address: 0xbbbb60b209c9115aed317b5e625c00be02cf4759d9a7f0a80ec5713afab1a46d
+Standard account address: 0x01cceb1533cd8502bbee964b6f61cf2c97802fe02c1bd566208dec3aeb84b312
+Private key:              0x28fceaad60c41da43509fc53646e879e3e0063c814ca01dc607627d6d0c5a7b6
 
-Starting search at 2023-04-26T12:06:57.444782-07:00
+Multisig account address: 0xbbbb44d05e29c1441f0ed2c0cbd51d1e05a933790059d984fb5ef551714e3060
+Standard account address: 0x556365fcc5239c5c1b6df2aaea7e05391de657d0fc052dd4a3f193747e66765b
+Private key:              0xde9e028a071a4b3de8066294a0d16639853819d56744b01d313e1d58c1ec9b45
 
-Multisig account address: 0xbbbbbbf1061840cccc8542b98ace03b73a2ffc7df609fbaf99c546982a8b7dc8
-Standard account address: 0xfc05df546a70c2fafeb8b9b19637fc9b70c2300e1e6f570c6369798f4afd6c77
-Private key:              0xd220c6fb9df3836d8e1463435cb427ff270b3ce417769adaf5903ebd49560da4
+Multisig account address: 0xbbbbdcf9d8df88dc5669f4ef970685ba36bcf161d0eecd32db917c9d29102f31
+Standard account address: 0xad07cb201013bf3d7947130973bf430be51eabba1313a7adf58a870bc33793f7
+Private key:              0x34565d5df3da025423da9719807b552f642dcd1f28621d9b1044db0c83e6a2ec
 
-Multisig account address: 0xbbbbbb4ab601a7c40b96384ef63a357609ad843056fbab6158bb396dd3193878
-Standard account address: 0x490f50f84013452a6660d99e8018acc1f20241da8321e9ddfb0d2b70c48742ef
-Private key:              0x7cd4bece605833845b00da1015e4615d48dffdf5714ce62980d305934f13df80
-
-Multisig account address: 0xbbbbbbfba754ccf12a05bf087051fe190928e41bafbeaa20ca94b6b066cfbed8
-Standard account address: 0x9f770fb89a85ce2916f127d3280d261234fc572d9949d7a9ffbe9b44251add20
-Private key:              0xa35f8534e883c1cf60b6c0d96863ac3eb54a9ce437708a1ac81762e268875312
-
-Elapsed time: 61.497349083s
+Elapsed time: 354.077237ms
+Total addresses generated: 190621
 ```
 
 ## General

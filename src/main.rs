@@ -241,9 +241,7 @@ fn main() -> Result<()> {
         let suffix = args.suffix.clone();
         let count = count.clone();
         thread::spawn(move || {
-            if let Err(e) = generate_key(prefix, suffix, args.multisig, match_tx, count) {
-                println!("Error: {}, in thread: {:?}", e, thread::current().id());
-            }
+            let _ = generate_key(prefix, suffix, args.multisig, match_tx, count);
         });
     }
 
@@ -291,19 +289,20 @@ fn main() -> Result<()> {
 
     // Stop search after the desired number of addresses have been generated.
     for _ in 0..args.count {
-        let (addr, pk, multi) = match_rx.recv()?;
-        bar.suspend(|| {
-            if let Some(multi) = multi {
-                println!("Multisig account address: 0x{}", multi);
-                println!("Standard account address: 0x{}", addr);
-                println!("Private key:              0x{}", pk);
-                println!();
-            } else {
-                println!("Standard account address: 0x{}", addr);
-                println!("Private key:              0x{}", pk);
-                println!();
-            }
-        });
+        if let Ok((addr, pk, multi)) = match_rx.recv() {
+            bar.suspend(|| {
+                if let Some(multi) = multi {
+                    println!("Multisig account address: 0x{}", multi);
+                    println!("Standard account address: 0x{}", addr);
+                    println!("Private key:              0x{}", pk);
+                    println!();
+                } else {
+                    println!("Standard account address: 0x{}", addr);
+                    println!("Private key:              0x{}", pk);
+                    println!();
+                }
+            });
+        }
     }
 
     bar.finish_and_clear();
